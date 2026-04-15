@@ -18,8 +18,10 @@ RUN apt-get update && \
 # Non-root user for runtime; UID can be overridden via HERMES_UID at runtime
 RUN useradd -u 10000 -m -d /opt/data hermes
 
-COPY --chmod=0755 --from=gosu_source /gosu /usr/local/bin/
-COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+COPY --from=gosu_source /gosu /usr/local/bin/
+RUN chmod +x /usr/local/bin/gosu
+COPY --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+RUN chmod +x /usr/local/bin/uv /usr/local/bin/uvx
 
 COPY . /opt/hermes
 WORKDIR /opt/hermes
