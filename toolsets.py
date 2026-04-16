@@ -196,8 +196,14 @@ TOOLSETS = {
     # Tools are injected via MemoryManager, not the toolset system.
 
     "homeassistant": {
-        "description": "Home Assistant smart home control and monitoring",
+        "description": "Home Assistant smart home control tools",
         "tools": ["ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"],
+        "includes": []
+    },
+    
+    "gcp-secret-manager": {
+        "description": "Google Cloud Secret Manager integration for secure credential management",
+        "tools": ["gcp_secret_read", "gcp_secret_write", "gcp_secret_list"],
         "includes": []
     },
 
