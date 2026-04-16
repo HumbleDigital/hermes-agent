@@ -1,0 +1,32 @@
+model:
+  provider: gemini
+  default: gemini-2.0-flash
+
+agent:
+  max_turns: 24
+  gateway_timeout: 300
+  gateway_timeout_warning: 120
+  gateway_notify_interval: 60
+
+platforms:
+  webhook:
+    enabled: true
+    extra:
+      host: 0.0.0.0
+      port: 8080
+      rate_limit: 10
+      routes:
+        poc:
+          secret: INSECURE_NO_AUTH
+          prompt: |
+            You are running inside a Cloud Run webhook POC for Hermes.
+
+            The inbound payload was:
+            {__raw__}
+
+            Task:
+            1. Read the payload.
+            2. If it includes a field named "message", answer that message directly.
+            3. Otherwise summarize the payload in one short paragraph.
+            4. Keep the response under 120 words.
+          deliver: log
