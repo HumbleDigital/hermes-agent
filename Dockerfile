@@ -24,6 +24,7 @@ COPY --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 RUN chmod +x /usr/local/bin/uv /usr/local/bin/uvx
 
 COPY . /opt/hermes
+COPY deploy-config.yaml /opt/hermes/deploy-config.yaml
 WORKDIR /opt/hermes
 
 # Install Node dependencies and Playwright as root (--with-deps needs apt)

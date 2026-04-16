@@ -48,7 +48,11 @@ fi
 
 # config.yaml
 if [ ! -f "$HERMES_HOME/config.yaml" ]; then
-    cp "$INSTALL_DIR/cli-config.yaml.example" "$HERMES_HOME/config.yaml"
+    if [ -f "$INSTALL_DIR/deploy-config.yaml" ]; then
+        cp "$INSTALL_DIR/deploy-config.yaml" "$HERMES_HOME/config.yaml"
+    else
+        cp "$INSTALL_DIR/cli-config.yaml.example" "$HERMES_HOME/config.yaml"
+    fi
 fi
 
 # SOUL.md

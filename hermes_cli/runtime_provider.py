@@ -382,6 +382,17 @@ def _resolve_named_custom_runtime(
     if not base_url:
         return None
 
+    # Handle boot-time zero-config overrides
+    boot_endpoint = os.getenv("HERMES_BOOT_ENDPOINT", "").strip()
+    if boot_endpoint:
+        return {
+            "provider": "custom",
+            "api_mode": "chat_completions",
+            "base_url": boot_endpoint,
+            "api_key": os.getenv("HERMES_BOOT_KEY", "no-key-required"),
+            "source": "boot-env",
+        }
+
     # Check if a credential pool exists for this custom endpoint
     pool_result = _try_resolve_from_custom_pool(base_url, "custom", custom_provider.get("api_mode"))
     if pool_result:
