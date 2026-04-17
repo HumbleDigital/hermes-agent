@@ -31,7 +31,7 @@ HumbleDigital deploys AI agent teams for solo operators. Each customer gets one 
 | **1 human, 1 Workspace, multiple agents** | Every agent acts through one shared Workspace identity via DWD |
 | **Agents serve the client** | The client decides how they interact (Chat, email, Telegram, SMS). The Workspace is back-office plumbing they never touch |
 | **The ops agent is the control plane** | Hermes provisions, monitors, and repairs. Other agents are the data plane |
-| **No custom backends for V1** | Google Tasks for state, Google Chat for visibility, Google Workspace for identity. Thin convention layer on standard APIs |
+| **No bespoke app-state service for V1** | Google Tasks for state, Google Chat for visibility, Google Workspace for identity, Cloud Tasks for dispatch. Thin convention layer on standard APIs. (Cloud Run, Secret Manager, Storage are infrastructure, not custom app logic) |
 | **Ship single-user first** | Teams are V2. Multi-tenant shared service is V3 |
 
 ## 3. System Architecture
@@ -122,9 +122,13 @@ HumbleDigital deploys AI agent teams for solo operators. Each customer gets one 
 
 ## 4. Single-User Deployment Model
 
+**V1 Scope:** Hermes (ops) + Controller (business ops) only. One client channel (Google Chat). Single GCE instance per client.
+
+**Future (Phase 2+):** Add Architect (coding) and Steward (life ops) profiles. Add Telegram/SMS channels.
+
 ```
 ┌──────────────────────────────────────────────────────┐
-│              SINGLE-USER DEPLOYMENT                   │
+│              SINGLE-USER DEPLOYMENT (V1)              │
 │                                                       │
 │  Google Workspace (1 seat: client@theirworkspace.net) │
 │  ┌────────────────────────────────────────────────┐  │
@@ -132,40 +136,46 @@ HumbleDigital deploys AI agent teams for solo operators. Each customer gets one 
 │  │ (1 inbox)│ (shared) │(shared)│(queues)│(agentops)│  │
 │  └────────────────────────────────────────────────┘  │
 │                                                       │
-│  GCP Project (dedicated or shared — see Phase 5)      │
+│  GCP Project (humble-ops — shared for V1)             │
 │  ┌────────────────────────────────────────────────┐  │
-│  │  Container: hermes-instance                     │  │
+│  │  GCE VM: hermes-<client> (always-on worker)    │  │
 │  │  ┌──────────────────────────────────────┐     │  │
 │  │  │ Agent profiles:                       │     │  │
-│  │  │  ├── default (Hermes — ops agent)    │     │  │
-│  │  │  ├── dinesh (coding)                 │     │  │
-│  │  │  ├── belvedere (life ops)            │     │  │
-│  │  │  └── wolff (business ops)            │     │  │
+│  │  │  ├── hermes (ops agent)              │     │  │
+│  │  │  └── controller (business ops)       │     │  │
 │  │  │                                       │     │  │
-│  │  │ Storage: Cloud Storage volume         │     │  │
-│  │  │ SQLite: per-profile databases         │     │  │
-│  │  │ Cron: built-in scheduler              │     │  │
+│  │  │ Storage: Local SSD (SQLite + state)   │     │  │
+│  │  │ Cloud Storage: blobs/artifacts only   │     │  │
+│  │  │ Cron: in-process scheduler            │     │  │
 │  │  └──────────────────────────────────────┘     │  │
+│  │                                                │  │
+│  │  Cloud Run: webhook ingress only              │  │
+│  │  (stateless, autoscaled, Chat/Telegram HTTP)  │  │
 │  │                                                │  │
 │  │  Service Accounts:                             │  │
 │  │  ├── hermes@client-ops.iam.gserviceaccount.com │  │
-│  │  ├── dinesh@client-ops.iam.gserviceaccount.com │  │
-│  │  ├── belvedere@client-ops.iam.gserviceaccount.com│  │
-│  │  └── wolff@client-ops.iam.gserviceaccount.com  │  │
+│  │  └── controller@client-ops.iam.gserviceaccount.com│  │
 │  │  (All DWD-impersonate: client@theirworkspace.net)│  │
 │  └────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
 ```
 
-### DWD Auth Model (Per-Client)
+### Identity Semantics
+
+**Bot Persona vs Workspace Identity:**
+
+- **Bot Persona (Chat identity):** Each agent appears as a distinct persona in Google Chat (Hermes, Architect, Steward, Controller). Messages show agent name/avatar.
+- **Workspace Identity (Gmail/Calendar/Drive):** All agents act through the single Workspace seat via DWD. Emails sent from `client@theirworkspace.net` with `From:` header showing agent name. Calendar events on client's primary calendar. Drive files in agent-specific shared drives.
+
+**Why separate?** The human client interacts with distinct agent personalities in Chat, but backend Workspace actions (email, calendar, Drive) all run under delegated user access. This is the correct mental model.
 
 ```
-All agents impersonate the single Workspace seat via DWD:
+  All agents impersonate the single Workspace seat via DWD:
 
   hermes@client-ops.iam ──DWD──► client@theirworkspace.net
-  dinesh@client-ops.iam ──DWD──► client@theirworkspace.net
-  belvedere@client-ops.iam ──DWD──► client@theirworkspace.net
-  wolff@client-ops.iam ──DWD──► client@theirworkspace.net
+  architect@client-ops.iam ──DWD──► client@theirworkspace.net
+  steward@client-ops.iam ──DWD──► client@theirworkspace.net
+  controller@client-ops.iam ──DWD──► client@theirworkspace.net
 
 Emails sent: client@theirworkspace.net (with From: header for agent identity)
 Calendar events: client's primary calendar
@@ -190,9 +200,19 @@ Chat: agentops space (all agents + client)
 
 ## 5. Inter-Agent Communication
 
-### Architecture: Tasks + Chat
+### Architecture: Cloud Tasks + Google Tasks + Chat
 
 Agents coordinate work through observable, trackable channels without blocking each other or the human.
+
+**Two-Queue Model:**
+
+| Queue Type | Purpose | Visibility | Implementation |
+|------------|---------|------------|----------------|
+| **Cloud Tasks** | Internal dispatch — webhook → agent process | Invisible (GCP internal) | `tools/gcp_tasks.py` |
+| **Google Tasks** | Agent work queues — human-visible task lists | Visible to client in Workspace | `tools/gcp_tasks.py` (Workspace API) |
+| **Google Chat** | Audit trail — all agent broadcasts | Visible to client | `gateway/platforms/google_chat.py` |
+
+**Why both?** Cloud Tasks is for async dispatch (serverless queuing with retry, backoff, rate limiting). Google Tasks is for work tracking (human-readable queues, auditable lifecycle, client visibility). They serve different purposes.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -361,9 +381,11 @@ Agent offline / task stuck
 | Agent Type | Template Includes |
 |------------|-------------------|
 | **Hermes** (ops) | Monitoring skills, provisioning skills, agent_comms tools, escalation prompts |
-| **Dinesh** (coding) | GitHub CLI, code review, debugging, agent_comms tools, coding system prompt |
-| **Belvedere** (life ops) | Calendar, Gmail, household skills, agent_comms tools, domestic ops prompt |
-| **Wolff** (business ops) | Sheets, financial tracking, reporting skills, agent_comms tools, business prompt |
+| **Architect** (coding) | GitHub CLI, code review, debugging, agent_comms tools, coding system prompt |
+| **Steward** (life ops) | Calendar, Gmail, household skills, agent_comms tools, domestic ops prompt |
+| **Controller** (business ops) | Sheets, financial tracking, reporting skills, agent_comms tools, business prompt |
+
+**Note:** Agent profile names are configurable. "Architect," "Steward," and "Controller" are functional descriptors — not trademarked character names. Final naming TBD.
 
 Each template: profile config, skill list, DWD scopes, cron schedule, system prompt, task list name, Chat space membership.
 
@@ -380,7 +402,7 @@ Due: <next expected heartbeat time>
 
 If Hermes doesn't see a heartbeat within 2x the expected interval, it triggers remediation.
 
-## 7. Technical Specifications
+### Technical Specifications
 
 ### Authentication
 
@@ -389,6 +411,10 @@ If Hermes doesn't see a heartbeat within 2x the expected interval, it triggers r
 - Scope: `https://www.googleapis.com/auth/chat.bot` (Chat API)
 - Scope: `https://www.googleapis.com/auth/tasks` (Tasks API)
 - Credentials: ADC at `~/.config/gcloud/application_default_credentials.json`
+
+**Target State:** No JSON service account keys. All auth via ADC + IAM signBlob. DWD for Workspace API calls.
+
+**Current Implementation Gap:** Some tools still check for local credential files. DWD subject delegation not yet implemented in Chat adapter. This is Phase 1 work.
 
 **Environment Variables:**
 ```bash
@@ -419,11 +445,27 @@ GOOGLE_CHAT_WEBHOOK_SECRET=***  # For webhook validation
 
 ### Deployment
 
+**Runtime Model: Cloud Run (ingress) + GCE (worker)**
+
+- **Cloud Run**: Webhook ingress only (Google Chat, Telegram, etc.). Stateless, autoscaled, handles HTTP callbacks.
+- **GCE VM**: Always-on Hermes worker process. Runs the in-process cron scheduler, SQLite databases, background task polling. Single-instance per client.
+
+**Why this split?** Cloud Run is stateless and autoscales — wrong fit for in-process cron + local SQLite. GCE provides persistent disk, always-on execution, and local file locking for the scheduler. This is the V1 model.
+
+**Future (Phase 5):** If scale-out is required, migrate scheduler to Cloud Tasks triggers + external database (Firestore or Cloud SQL).
+
 **Cloud Run:**
 - Container: `hd-hermes-agent` (Python 3.11+)
 - Memory: 2GB (configurable)
 - CPU: 1 vCPU (configurable)
 - Timeout: 300s (max for Cloud Run)
+- Purpose: Webhook endpoints only
+
+**GCE VM:**
+- Machine type: e2-standard-2 (2 vCPU, 8GB RAM)
+- Boot disk: 50GB SSD (SQLite + logs + local state)
+- Zone: us-east1-b (existing NAT router)
+- Purpose: Always-on worker, cron scheduler, SQLite databases
 
 **Cloud Tasks:**
 - Queue: `hermes-<agent>-queue`
@@ -436,6 +478,14 @@ GOOGLE_CHAT_WEBHOOK_SECRET=***  # For webhook validation
 - Location: `us-east1`
 - Storage class: STANDARD (active), NEARLINE (archive)
 - Lifecycle rules: 30-day deletion for temp objects
+- **Purpose: Object storage only (blobs, artifacts, backups). NOT SQLite backing.**
+
+### SQLite Strategy
+
+- **V1 (single-instance):** SQLite on local GCE boot disk. Fast, simple, no network latency.
+- **Constraint:** Single-instance only. No concurrent writes from multiple processes.
+- **Future (Phase 5):** Migrate to Cloud SQL (PostgreSQL) or Firestore if scale-out required.
+- **Never:** Do NOT use Cloud Storage (GCS) as SQLite backing — GCS is object storage, not a filesystem.
 
 ### GCP Dependencies (pyproject.toml)
 
@@ -475,24 +525,29 @@ gcp = [
 
 ## Phase 1: Single-User Deployment (IN PROGRESS)
 
-**Goal:** Deploy first production agent with single-user model.
+**Goal:** Deploy first production agent (Hermes + Controller) with single-user model.
 
 **Planned:**
-- [ ] Deploy Hermes ops agent to Cloud Run
-- [ ] Configure Google Chat webhook for ops channel
-- [ ] Create `hermes-ops-queue` in Cloud Tasks
-- [ ] Set up Cloud Storage bucket `hd-hermes-ops-data`
+- [ ] Deploy Hermes ops agent to GCE VM (always-on worker)
+- [ ] Configure Google Chat webhook for ops channel (Cloud Run ingress)
+- [ ] Create `hermes-ops-queue` in Google Tasks (Workspace product)
+- [ ] Set up Cloud Storage bucket `hd-hermes-ops-data` (blobs only)
 - [ ] Configure Secret Manager for API keys
+- [ ] Implement DWD subject delegation in Chat adapter
 - [ ] Document onboarding flow (Hermes interviews client, provisions agents)
 
 **Infrastructure:**
-- Cloud Run for webhooks and agent runtime
-- Cloud Tasks for work queues
-- Cloud Storage for per-client buckets
+- GCE VM for always-on worker (cron scheduler, SQLite, task polling)
+- Cloud Run for webhooks (stateless ingress)
+- Google Tasks for work queues (visible to client)
+- Cloud Tasks for internal dispatch (invisible)
+- Cloud Storage for blobs/artifacts
 - Secret Manager for credentials
 
 **Cost Target:** ~$49/mo (e2-standard-2 + SSD + GCS in us-east1)  
 **Runway:** $300 credit = 6+ months
+
+**V1 Scope Constraint:** Hermes + Controller only. Google Chat only. Single client. No Workspace provisioning automation (manual setup for first deployment).
 
 ## Phase 2: Inter-Agent Communication
 
@@ -525,6 +580,14 @@ gcp = [
 ## Phase 4: Client Onboarding & Provisioning
 
 **Goal:** From payment to agents working in under 10 minutes. Zero manual steps by HumbleDigital staff.
+
+**V1 Reality Check:** Phase 4 is too wide for V1. First deployment will have manual Workspace setup, manual DWD configuration, and HumbleDigital staff involvement. The zero-touch goal is the target state, not the V1 reality.
+
+**Two Onboarding Tracks (Future):**
+1. **Managed HumbleDigital Workspace** — We create the Workspace, domain, DWD, everything. Client pays one bill.
+2. **Bring Your Own Workspace** — Client has existing Workspace, we configure DWD and deploy agents. Faster, less control.
+
+For V1: Track 1 only (managed). Track 2 is Phase 3 work.
 
 **Onboarding Flow:**
 ```
@@ -645,7 +708,7 @@ No multi-tenant shared database. No shared process. Each client's data only live
 | Limitation | Workaround |
 |------------|------------|
 | **Task notes: 4,096 character limit** | Large context (code, diffs, logs) must be referenced by URL (PR link, file path) rather than inline |
-| **No assignee field in Tasks API** | Agent identity is encoded in task list name (dinesh-queue, belvedere-queue) |
+| **No assignee field in Tasks API** | Agent identity is encoded in task list name (`architect-queue`, `steward-queue`) |
 | **No webhook on task completion** | Crons must poll. Acceptable for agent cadence (5m intervals) |
 | **Google Chat requires @mention for bot in spaces** | DMs work without mention. Space messages must @mention the bot |
 | **Workspace seat cost** | 1 seat per client, not per agent. Agents share the seat via DWD |
@@ -654,10 +717,10 @@ No multi-tenant shared database. No shared process. Each client's data only live
 
 | Entity | Convention | Example |
 |--------|-----------|---------|
-| Service account | `{agent}@{client}-ops.iam.gserviceaccount.com` | `dinesh@acme-ops.iam.gserviceaccount.com` |
-| Task list | `{agent}-queue` | `dinesh-queue`, `hermes-queue` |
+| Service account | `{agent}@{client}-ops.iam.gserviceaccount.com` | `architect@acme-ops.iam.gserviceaccount.com` |
+| Task list | `{agent}-queue` | `architect-queue`, `hermes-queue` |
 | Chat space | `agentops-{client}` | `agentops-acme` |
-| Drive folder | `{agent} (shared drive)` | `Dinesh (shared drive)` |
+| Drive folder | `{agent} (shared drive)` | `Architect (shared drive)` |
 | Container | `hermes-{client}` | `hermes-acme` |
 | Storage bucket | `hermes-{client}-data` | `hermes-acme-data` |
 
