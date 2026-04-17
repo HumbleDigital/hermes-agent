@@ -30,11 +30,7 @@ from gateway.platforms.base import (
     MessageType,
     SendResult,
 )
-from gateway.platforms.google_chat_auth import (
-    GOOGLE_CHAT_BOT_SCOPE,
-    build_google_chat_app_credentials,
-    google_chat_service_account_available,
-)
+from gateway.platforms import google_chat_auth
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +40,8 @@ def check_google_chat_requirements() -> bool:
     if not HAS_GOOGLE_API:
         logger.warning("[Google Chat] google-api-python-client not installed")
         return False
-    if not google_chat_service_account_available():
-        logger.warning("[Google Chat] GOOGLE_APPLICATION_CREDENTIALS must point to a service-account JSON key")
-        return False
+    
+    # Check for project ID
     if not (
         os.getenv("GOOGLE_CLOUD_PROJECT")
         or os.getenv("GCP_PROJECT")
@@ -54,7 +49,28 @@ def check_google_chat_requirements() -> bool:
     ):
         logger.warning("[Google Chat] No GCP project ID set")
         return False
-    return True
+    
+    # Check for credentials (either service account key OR ADC + DWD)
+    from gateway.platforms.google_chat_auth import (
+        resolve_google_chat_service_account_file,
+        _get_adc_credentials,
+    )
+    
+    has_sa_key = resolve_google_chat_service_account_file() is not None
+    has_adc = _get_adc_credentials() is not None
+    has_dwd_subject = bool(os.getenv("GOOGLE_CHAT_DWD_SUBJECT"))
+    
+    if has_sa_key:
+        return True
+    if has_adc and has_dwd_subject:
+        return True
+    
+    logger.warning(
+        "[Google Chat] No valid credentials. Need either:\n"
+        "  1. GOOGLE_APPLICATION_CREDENTIALS pointing to service account JSON, OR\n"
+        "  2. ADC credentials (gcloud auth application-default login) + GOOGLE_CHAT_DWD_SUBJECT"
+    )
+    return False
 
 
 def normalize_google_chat_webhook_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,8 +124,10 @@ class GoogleChatAdapter(BasePlatformAdapter):
         if not self._project_id:
             logger.error("[Google Chat] No GCP project ID set")
             return False
-        if not google_chat_service_account_available():
-            logger.error("[Google Chat] GOOGLE_APPLICATION_CREDENTIALS must point to a service-account JSON key")
+        if not google_chat_service_account_available() and not (
+            google_chat_auth._get_adc_credentials() is not None and os.getenv("GOOGLE_CHAT_DWD_SUBJECT")
+        ):
+            logger.error("[Google Chat] No valid credentials. Need either SA JSON key or ADC + GOOGLE_CHAT_DWD_SUBJECT")
             return False
 
         try:
