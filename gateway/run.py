@@ -2536,6 +2536,13 @@ class GatewayRunner:
                 logger.warning("Slack: slack-bolt not installed. Run: pip install 'hermes-agent[slack]'")
                 return None
             return SlackAdapter(config)
+        
+        elif platform == Platform.GOOGLE_CHAT:
+            from gateway.platforms.google_chat import GoogleChatAdapter, check_google_chat_requirements
+            if not check_google_chat_requirements():
+                logger.warning("Google Chat: google-api-python-client not installed. Run: pip install 'hermes-agent[gcp]'")
+                return None
+            return GoogleChatAdapter(config)
 
         elif platform == Platform.SIGNAL:
             from gateway.platforms.signal import SignalAdapter, check_signal_requirements
@@ -2689,6 +2696,7 @@ class GatewayRunner:
             Platform.WEIXIN: "WEIXIN_ALLOWED_USERS",
             Platform.BLUEBUBBLES: "BLUEBUBBLES_ALLOWED_USERS",
             Platform.QQBOT: "QQ_ALLOWED_USERS",
+            Platform.GOOGLE_CHAT: "GOOGLE_CHAT_ALLOWED_USERS",
         }
         platform_group_env_map = {
             Platform.QQBOT: "QQ_GROUP_ALLOWED_USERS",
@@ -2710,6 +2718,7 @@ class GatewayRunner:
             Platform.WEIXIN: "WEIXIN_ALLOW_ALL_USERS",
             Platform.BLUEBUBBLES: "BLUEBUBBLES_ALLOW_ALL_USERS",
             Platform.QQBOT: "QQ_ALLOW_ALL_USERS",
+            Platform.GOOGLE_CHAT: "GOOGLE_CHAT_ALLOW_ALL_USERS",
         }
 
         # Per-platform allow-all flag (e.g., DISCORD_ALLOW_ALL_USERS=true)

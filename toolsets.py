@@ -206,6 +206,18 @@ TOOLSETS = {
         "tools": ["gcp_secret_read", "gcp_secret_write", "gcp_secret_list"],
         "includes": []
     },
+    
+    "gcp-tasks": {
+        "description": "Google Cloud Tasks for inter-agent communication and work queues",
+        "tools": ["gcp_tasks_create", "gcp_tasks_list", "gcp_tasks_delete", "gcp_tasks_create_queue", "gcp_tasks_list_queues"],
+        "includes": []
+    },
+    
+    "gcp-storage": {
+        "description": "Google Cloud Storage for per-client data buckets and volume mounting",
+        "tools": ["gcp_storage_create_bucket", "gcp_storage_list_buckets", "gcp_storage_delete_bucket", "gcp_storage_upload", "gcp_storage_download", "gcp_storage_list_blobs", "gcp_storage_delete_blob"],
+        "includes": []
+    },
 
 
     # Scenario-specific toolsets
