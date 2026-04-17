@@ -205,6 +205,29 @@ class TestToolsetConsistency:
         for ts in tool_sets[1:]:
             assert ts == tool_sets[0]
 
+    def test_gcp_toolsets_include_expected_tools(self):
+        assert TOOLSETS["gcp-secret-manager"]["tools"] == [
+            "gcp_secret_read",
+            "gcp_secret_write",
+            "gcp_secret_list",
+        ]
+        assert TOOLSETS["gcp-tasks"]["tools"] == [
+            "gcp_tasks_create",
+            "gcp_tasks_list",
+            "gcp_tasks_delete",
+            "gcp_tasks_create_queue",
+            "gcp_tasks_list_queues",
+        ]
+        assert TOOLSETS["gcp-storage"]["tools"] == [
+            "gcp_storage_create_bucket",
+            "gcp_storage_list_buckets",
+            "gcp_storage_delete_bucket",
+            "gcp_storage_upload",
+            "gcp_storage_download",
+            "gcp_storage_list_blobs",
+            "gcp_storage_delete_blob",
+        ]
+
 
 class TestPluginToolsets:
     def test_get_all_toolsets_includes_plugin_toolset(self, monkeypatch):

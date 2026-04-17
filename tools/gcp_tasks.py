@@ -32,10 +32,12 @@ logger = logging.getLogger(__name__)
 try:
     from google.cloud import tasks_v2
     from google.api_core.exceptions import NotFound, PermissionDenied, GoogleAPIError
+    from google.protobuf.timestamp_pb2 import Timestamp
     HAS_GCP = True
 except ImportError:
     HAS_GCP = False
     tasks_v2 = None  # Placeholder for type hints
+    Timestamp = None
     logger.warning("Google Cloud Tasks client not installed. Tool will be unavailable.")
 
 
@@ -158,7 +160,7 @@ def create_task(
         
         # Set schedule time if provided
         if schedule_time:
-            task["schedule_time"] = tasks_v2.Timestamp()
+            task["schedule_time"] = Timestamp()
             task["schedule_time"].FromDatetime(schedule_time)
         
         # Set custom name if provided

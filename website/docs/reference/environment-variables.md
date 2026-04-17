@@ -171,6 +171,22 @@ For cloud sandbox backends, persistence is filesystem-oriented. `TERMINAL_LIFETI
 | `TERMINAL_LOCAL_PERSISTENT` | Enable persistent shell for local backend (default: `false`) |
 | `TERMINAL_SSH_PERSISTENT` | Override persistent shell for SSH backend (default: follows `TERMINAL_PERSISTENT_SHELL`) |
 
+## Google Cloud
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a Google service-account JSON key used by Google Chat runtime auth and DWD provisioning |
+| `GOOGLE_CLOUD_PROJECT` | Primary GCP project ID used by the GCP tools and Google Chat |
+| `GCP_PROJECT` | Alternate project ID env var accepted by the GCP tools |
+| `GCLOUD_PROJECT` | Alternate project ID env var accepted by the GCP tools |
+| `GOOGLE_CHAT_DWD_SUBJECT` | Delegated Workspace user used for Google Chat space provisioning with DWD |
+| `GOOGLE_CHAT_SPACE_ID` | Target Google Chat space ID for the Phase 1 smoke runner |
+| `GOOGLE_CHAT_SPACE_NAME` | Human-readable name for the smoke-runner test space |
+| `GOOGLE_CHAT_WEBHOOK_SECRET` | Optional legacy webhook validation secret for Google Chat endpoints |
+| `GCP_TASKS_HANDLER_URL` | HTTP endpoint used by Cloud Tasks dispatches in the Phase 1 smoke runner |
+| `GCP_TASKS_LOCATION` | Default Cloud Tasks location (defaults to `us-east1`) |
+| `GCP_STORAGE_LOCATION` | Default Cloud Storage location (defaults to `us-east1`) |
+
 ## Messaging
 
 | Variable | Description |

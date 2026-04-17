@@ -58,6 +58,9 @@ Or in-session:
 | `cronjob` | `cronjob` | Schedule and manage recurring tasks. |
 | `delegation` | `delegate_task` | Spawn isolated subagent instances for parallel work. |
 | `file` | `patch`, `read_file`, `search_files`, `write_file` | File reading, writing, searching, and editing. |
+| `gcp-secret-manager` | `gcp_secret_list`, `gcp_secret_read`, `gcp_secret_write` | Google Cloud Secret Manager for encrypted secret storage. |
+| `gcp-storage` | `gcp_storage_create_bucket`, `gcp_storage_delete_blob`, `gcp_storage_delete_bucket`, `gcp_storage_download`, `gcp_storage_list_blobs`, `gcp_storage_list_buckets`, `gcp_storage_upload` | Google Cloud Storage for buckets, object transfer, and cleanup. |
+| `gcp-tasks` | `gcp_tasks_create`, `gcp_tasks_create_queue`, `gcp_tasks_delete`, `gcp_tasks_list`, `gcp_tasks_list_queues` | Google Cloud Tasks for queue-backed work dispatch. |
 | `homeassistant` | `ha_call_service`, `ha_get_state`, `ha_list_entities`, `ha_list_services` | Smart home control via Home Assistant. Only available when `HASS_TOKEN` is set. |
 | `image_gen` | `image_generate` | Text-to-image generation via FAL.ai. |
 | `memory` | `memory` | Persistent cross-session memory management. |
@@ -88,7 +91,7 @@ Platform toolsets define the complete tool configuration for a deployment target
 
 | Toolset | Differences from `hermes-cli` |
 |---------|-------------------------------|
-| `hermes-cli` | Full toolset — all 36 tools including `clarify`. The default for interactive CLI sessions. |
+| `hermes-cli` | Full toolset including `clarify`. The default for interactive CLI sessions. |
 | `hermes-acp` | Drops `clarify`, `cronjob`, `image_generate`, `send_message`, `text_to_speech`, homeassistant tools. Focused on coding tasks in IDE context. |
 | `hermes-api-server` | Drops `clarify`, `send_message`, and `text_to_speech`. Adds everything else — suitable for programmatic access where user interaction isn't possible. |
 | `hermes-telegram` | Same as `hermes-cli`. |

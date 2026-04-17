@@ -140,5 +140,7 @@ include = ["agent", "tools", "tools.*", "hermes_cli", "gateway", "gateway.*", "t
 testpaths = ["tests"]
 markers = [
     "integration: marks tests requiring external services (API keys, Modal, etc.)",
+    "gcp_live: marks tests that require live Google Cloud access",
+    "google_chat_live: marks tests that require live Google Chat access",
 ]
 addopts = "-m 'not integration' -n auto"
