@@ -14,7 +14,7 @@ services:
   hermes:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: dev-Dockerfile
     image: hd-hermes-agent:dev
     container_name: hermes-gilfoyle-dev
     stdin_open: true
