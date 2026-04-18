@@ -1,6 +1,8 @@
 model:
   provider: gemini
   default: gemini-2.0-flash
+  # API key will be injected from GCP Secret Manager at container startup
+  # via secret-bootstrap.sh (hermes-google-ai-studio-api-key -> GEMINI_API_KEY)
 
 agent:
   max_turns: 24

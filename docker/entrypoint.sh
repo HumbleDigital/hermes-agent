@@ -39,6 +39,12 @@ fi
 # --- Running as hermes from here ---
 source "${INSTALL_DIR}/.venv/bin/activate"
 
+# --- Bootstrap secrets from GCP Secret Manager ---
+# Pulls secrets matching HERMES_SECRET_PREFIX and exports as env vars.
+# Skipped gracefully if GOOGLE_CLOUD_PROJECT is not set or GCP lib missing.
+# Existing env vars are NOT overwritten (allows docker-compose overrides).
+source "${INSTALL_DIR}/scripts/secret-bootstrap.sh"
+
 # Create essential directory structure.  Cache and platform directories
 # (cache/images, cache/audio, platforms/whatsapp, etc.) are created on
 # demand by the application — don't pre-create them here so new installs
