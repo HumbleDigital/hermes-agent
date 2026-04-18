@@ -1,5 +1,15 @@
 # Docker Compose config for local development
-# Usage: docker compose -f docker-compose.dev.yaml up
+#
+# Interactive shell (bootstraps secrets, drops into bash):
+#   docker compose -f docker-compose.dev.yaml run --rm hermes bash
+#
+# Interactive chat (drops into hermes CLI):
+#   docker compose -f docker-compose.dev.yaml run --rm hermes
+#
+# Gateway daemon (Telegram/Discord, long-running):
+#   docker compose -f docker-compose.dev.yaml up
+#   (add command: ["gateway", "run"] for gateway mode)
+#
 services:
   hermes:
     build:
@@ -7,29 +17,34 @@ services:
       dockerfile: Dockerfile
     image: hd-hermes-agent:dev
     container_name: hermes-gilfoyle-dev
+    stdin_open: true
+    tty: true
     ports:
       - "8080:8080"
     environment:
+      # Path to ADC credentials (mounted below)
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/creds/application_default_credentials.json
+      # Hermes data directory
+      HERMES_HOME: /opt/data
       # GCP project for Secret Manager bootstrap and tool auth
-      - GOOGLE_CLOUD_PROJECT=humble-ops
+      GOOGLE_CLOUD_PROJECT: humble-ops
       # DWD subject for Google Chat and other Workspace APIs
-      - GOOGLE_CHAT_DWD_SUBJECT=scoobycarolan@humbledigital.net
+      GOOGLE_CHAT_DWD_SUBJECT: scoobycarolan@humbledigital.net
       # Secret prefix to fetch (only secrets starting with this will be injected)
-      - HERMES_SECRET_PREFIX=hermes-
+      HERMES_SECRET_PREFIX: hermes-
       # Explicit mapping: GCP secret name = ENV_VAR_NAME
       # Secrets not listed here use the default convention:
       #   hermes-google-ai-studio-api-key -> GOOGLE_AI_STUDIO_API_KEY
       #   hermes-ollama-api-key -> OLLAMA_API_KEY
-      - HERMES_SECRET_MAPPING=hermes-google-ai-studio-api-key=GEMINI_API_KEY,hermes-ollama-api-key=OLLAMA_API_KEY
+      HERMES_SECRET_MAPPING: hermes-google-ai-studio-api-key=GEMINI_API_KEY,hermes-ollama-api-key=OLLAMA_API_KEY
     volumes:
       # Persist hermes data (sessions, memories, config) across restarts
-      - hermes-data:/opt/data
+      - /tmp/hermes-gilfoyle-test:/opt/data
       # Mount gcloud ADC credentials for GCP auth
       - ~/.config/gcloud/application_default_credentials.json:/opt/creds/application_default_credentials.json:ro
+      # Mount updated entrypoint (avoids full image rebuild during dev)
+      - ./docker/entrypoint.sh:/opt/hermes/docker/entrypoint.sh:ro
     env_file:
       # Optional: local .env for overrides (takes precedence over secret bootstrap)
       - path: .env
         required: false
-
-volumes:
-  hermes-data:

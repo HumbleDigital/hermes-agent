@@ -78,4 +78,11 @@ if [ -d "$INSTALL_DIR/skills" ]; then
     python3 "$INSTALL_DIR/tools/skills_sync.py"
 fi
 
+# If the first argument is "bash" or "sh", drop into an interactive shell
+# instead of running hermes. Secrets and config are still bootstrapped.
+# Usage: docker compose run --rm hermes bash
+if [ "$1" = "bash" ] || [ "$1" = "sh" ]; then
+    exec "$@"
+fi
+
 exec hermes "$@"
